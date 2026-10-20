@@ -2,7 +2,11 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-const DB_PATH = process.env.DATABASE_PATH || './data/factories.db';
+// Vercel's serverless functions can only write under /tmp — everything else
+// in the deployment is read-only. Detected via VERCEL (set automatically in
+// that environment); anywhere else (a VPS, Fly.io, plain `next start`)
+// ./data is a real persistent directory, so that stays the default there.
+const DB_PATH = process.env.DATABASE_PATH || (process.env.VERCEL ? '/tmp/factories.db' : './data/factories.db');
 
 let db: Database.Database | null = null;
 
