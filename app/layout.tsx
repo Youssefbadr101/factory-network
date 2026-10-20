@@ -16,9 +16,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="font-serif text-xl italic tracking-tight text-zinc-900">
               Factory Network
             </Link>
-            <span className="text-sm text-zinc-500" title="Open source — fork this to run your own directory">
+            <a
+              href="https://github.com/Youssefbadr101/factory-network"
+              className="text-sm text-zinc-500 hover:text-zinc-900"
+              title="Open source — fork this to run your own directory"
+            >
               Open source
-            </span>
+            </a>
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
