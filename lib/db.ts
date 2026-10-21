@@ -1,44 +1,21 @@
-import Database from 'better-sqlite3';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-// Vercel's serverless functions can only write under /tmp — everything else
-// in the deployment is read-only. Detected via VERCEL (set automatically in
-// that environment); anywhere else (a VPS, Fly.io, plain `next start`)
-// ./data is a real persistent directory, so that stays the default there.
-const DB_PATH = process.env.DATABASE_PATH || (process.env.VERCEL ? '/tmp/factories.db' : './data/factories.db');
+// A shared Postgres table (factory_network_listings), not a dedicated
+// database for this project — see the migration note in the repo history
+// for why. All access here goes through the service-role key, server-side
+// only (Server Components / Server Actions) — this file is never imported
+// client-side, so the key is never exposed to the browser. Public read
+// access is also enforced at the database level via RLS, independent of
+// this app's own logic.
+let client: SupabaseClient | null = null;
 
-let db: Database.Database | null = null;
-
-/** Lazily opens (and schema-initializes) the one SQLite file this app uses — no external database to stand up, which is the whole point for a project meant to be cloned and run by anyone. */
-export function getDb(): Database.Database {
-  if (db) return db;
-
-  mkdirSync(dirname(DB_PATH), { recursive: true });
-  db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL');
-
-  db.exec(`
-    create table if not exists factories (
-      id text primary key,
-      name text not null,
-      city text,
-      country text,
-      categories text not null default '[]', -- JSON array of strings
-      moq text,
-      capacity text,
-      contact_name text,
-      phone text,
-      email text,
-      website text,
-      notes text,
-      created_at text not null default (datetime('now')),
-      updated_at text not null default (datetime('now'))
-    );
-    create index if not exists factories_name_idx on factories (name);
-  `);
-
-  return db;
+function getClient(): SupabaseClient {
+  if (client) return client;
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set — see .env.example.');
+  client = createClient(url, key, { auth: { persistSession: false } });
+  return client;
 }
 
 export interface FactoryRow {
@@ -58,25 +35,6 @@ export interface FactoryRow {
   updated_at: string;
 }
 
-interface FactoryRowRaw extends Omit<FactoryRow, 'categories'> {
-  categories: string;
-}
-
-function parseRow(row: FactoryRowRaw): FactoryRow {
-  let categories: string[] = [];
-  try {
-    categories = JSON.parse(row.categories);
-  } catch {
-    categories = [];
-  }
-  return { ...row, categories };
-}
-
-export function listFactories(): FactoryRow[] {
-  const rows = getDb().prepare('select * from factories order by name asc').all() as FactoryRowRaw[];
-  return rows.map(parseRow);
-}
-
 export interface FactoryInput {
   name: string;
   city: string | null;
@@ -91,29 +49,27 @@ export interface FactoryInput {
   notes: string | null;
 }
 
-export function insertFactory(input: FactoryInput): FactoryRow {
-  const id = crypto.randomUUID();
-  getDb()
-    .prepare(
-      `insert into factories (id, name, city, country, categories, moq, capacity, contact_name, phone, email, website, notes)
-       values (@id, @name, @city, @country, @categories, @moq, @capacity, @contact_name, @phone, @email, @website, @notes)`
-    )
-    .run({ id, ...input, categories: JSON.stringify(input.categories) });
-  return parseRow(getDb().prepare('select * from factories where id = ?').get(id) as FactoryRowRaw);
+const TABLE = 'factory_network_listings';
+
+export async function listFactories(): Promise<FactoryRow[]> {
+  const { data, error } = await getClient().from(TABLE).select('*').order('name', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as FactoryRow[];
 }
 
-export function updateFactory(id: string, input: FactoryInput): FactoryRow | null {
-  getDb()
-    .prepare(
-      `update factories set name=@name, city=@city, country=@country, categories=@categories, moq=@moq,
-       capacity=@capacity, contact_name=@contact_name, phone=@phone, email=@email, website=@website, notes=@notes,
-       updated_at=datetime('now') where id=@id`
-    )
-    .run({ id, ...input, categories: JSON.stringify(input.categories) });
-  const row = getDb().prepare('select * from factories where id = ?').get(id) as FactoryRowRaw | undefined;
-  return row ? parseRow(row) : null;
+export async function insertFactory(input: FactoryInput): Promise<FactoryRow> {
+  const { data, error } = await getClient().from(TABLE).insert(input).select().single();
+  if (error) throw error;
+  return data as FactoryRow;
 }
 
-export function deleteFactory(id: string): void {
-  getDb().prepare('delete from factories where id = ?').run(id);
+export async function updateFactory(id: string, input: FactoryInput): Promise<FactoryRow | null> {
+  const { data, error } = await getClient().from(TABLE).update(input).eq('id', id).select().maybeSingle();
+  if (error) throw error;
+  return data as FactoryRow | null;
+}
+
+export async function deleteFactory(id: string): Promise<void> {
+  const { error } = await getClient().from(TABLE).delete().eq('id', id);
+  if (error) throw error;
 }

@@ -45,7 +45,7 @@ export async function addFactory(formData: FormData) {
   if (!(await isAdmin())) redirect('/admin/login');
   const input = parseInput(formData);
   if (!input.name) return;
-  insertFactory(input);
+  await insertFactory(input);
   revalidatePath('/');
   revalidatePath('/admin');
 }
@@ -54,14 +54,14 @@ export async function editFactory(id: string, formData: FormData) {
   if (!(await isAdmin())) redirect('/admin/login');
   const input = parseInput(formData);
   if (!input.name) return;
-  updateFactory(id, input);
+  await updateFactory(id, input);
   revalidatePath('/');
   revalidatePath('/admin');
 }
 
 export async function removeFactory(id: string) {
   if (!(await isAdmin())) redirect('/admin/login');
-  deleteFactory(id);
+  await deleteFactory(id);
   revalidatePath('/');
   revalidatePath('/admin');
 }

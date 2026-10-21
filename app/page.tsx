@@ -1,8 +1,10 @@
 import { listFactories } from '@/lib/db';
 import FactoryDirectory from '@/components/FactoryDirectory';
 
-export default function HomePage() {
-  const factories = listFactories();
+export const dynamic = 'force-dynamic'; // always read the current directory, never a build-time snapshot
+
+export default async function HomePage() {
+  const factories = await listFactories();
 
   return (
     <div>

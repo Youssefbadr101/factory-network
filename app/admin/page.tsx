@@ -7,7 +7,7 @@ import AdminFactoryTable from '@/components/AdminFactoryTable';
 export default async function AdminPage() {
   if (!(await isAdmin())) redirect('/admin/login');
 
-  const factories = listFactories();
+  const factories = await listFactories();
 
   return (
     <div>
