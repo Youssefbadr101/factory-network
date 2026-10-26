@@ -1,15 +1,27 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Plus, Trash2, Pencil, Loader2 } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
+import { Plus, Trash2, Pencil, Loader2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { addFactory, editFactory, removeFactory } from '@/lib/actions';
 import type { FactoryRow } from '@/lib/db';
 
-export default function AdminFactoryTable({ factories }: { factories: FactoryRow[] }) {
+export default function AdminFactoryTable({
+  factories,
+  query,
+  page,
+  pageCount,
+}: {
+  factories: FactoryRow[];
+  query: string;
+  page: number;
+  pageCount: number;
+}) {
   const [editing, setEditing] = useState<FactoryRow | 'new' | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState(query);
   const router = useRouter();
+  const pathname = usePathname();
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this factory? This cannot be undone.')) return;
@@ -19,12 +31,35 @@ export default function AdminFactoryTable({ factories }: { factories: FactoryRow
     router.refresh();
   }
 
+  function goTo(q: string, p: number) {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (p > 1) params.set('page', String(p));
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
+  }
+
   return (
     <div>
-      <div className="mb-4 flex justify-end">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            goTo(searchInput.trim(), 1);
+          }}
+          className="relative max-w-sm flex-1"
+        >
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" strokeWidth={2} />
+          <input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search..."
+            className="w-full rounded-lg border border-zinc-300 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-zinc-500"
+          />
+        </form>
         <button
           onClick={() => setEditing('new')}
-          className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90"
         >
           <Plus className="h-4 w-4" strokeWidth={2} />
           Add factory
@@ -66,6 +101,28 @@ export default function AdminFactoryTable({ factories }: { factories: FactoryRow
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {pageCount > 1 && (
+        <div className="mt-6 flex items-center justify-center gap-4 text-sm">
+          <button
+            onClick={() => goTo(query, page - 1)}
+            disabled={page <= 1}
+            className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-zinc-600 disabled:opacity-40"
+          >
+            <ChevronLeft className="h-4 w-4" strokeWidth={1.75} /> Prev
+          </button>
+          <span className="text-zinc-500">
+            Page {page} of {pageCount}
+          </span>
+          <button
+            onClick={() => goTo(query, page + 1)}
+            disabled={page >= pageCount}
+            className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-zinc-600 disabled:opacity-40"
+          >
+            Next <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
+          </button>
         </div>
       )}
 
